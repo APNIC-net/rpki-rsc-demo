@@ -1,0 +1,73 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+use APNIC::RPKI::CA;
+use APNIC::RPKI::CMS;
+use APNIC::RPKI::OpenSSL;
+use APNIC::RPKI::RSC;
+use APNIC::RPKI::Validator;
+
+use Cwd;
+use File::Slurp qw(read_file);
+use File::Temp;
+use Getopt::Long;
+
+sub usage
+{
+    print <<EOF;
+Usage:
+$0 --in {path}
+
+Show an RSC's details.
+EOF
+
+    exit(10);
+}
+
+my %options;
+GetOptions(\%options, 'in=s');
+if (not $options{'in'}) {
+    print "Please enter an input path.\n";
+    usage();
+}
+
+my ($in) = @options{qw(in)};
+
+my $cms = read_file($in);
+my $openssl = APNIC::RPKI::OpenSSL->new()->{'path'};
+my $ft = File::Temp->new();
+my $fn = $ft->filename();
+my $res = system("$openssl cms -verify -noverify -inform DER -in $in -out $fn ".
+                 ">/dev/null 2>&1");
+if ($res != 0) {
+    die "Unable to parse CMS.";
+}
+my $rsc_raw = read_file($fn);
+
+my $cms_parser = APNIC::RPKI::CMS->new();
+my $rsc_parser = APNIC::RPKI::RSC->new();
+my $cms_data = $cms_parser->decode($cms);
+$rsc_parser->decode($rsc_raw);
+
+print "Version:    ".$rsc_parser->version(),"\n";
+print "Algorithm:  ".$rsc_parser->algorithm()."\n";
+my $ipv4 = $rsc_parser->ipv4();
+my $ipv6 = $rsc_parser->ipv6();
+my $asn  = $rsc_parser->asn();
+print "IPv4:       ".($ipv4 ? $ipv4->as_string() : '')."\n";
+print "IPv6:       ".($ipv6 ? $ipv6->as_string() : '')."\n";
+print "ASN:        ".($asn  ? "$asn"             : '')."\n";
+
+print "Files: \n";
+my @filenames = $rsc_parser->filenames();
+my @hashes = $rsc_parser->hashes();
+
+for (my $i = 0; $i < @filenames; $i++) {
+    my $filename = $filenames[$i];
+    my $hash = $hashes[$i];
+    print "  $hash: $filename\n";
+}
+
+1;

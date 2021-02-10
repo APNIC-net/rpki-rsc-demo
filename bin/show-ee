@@ -1,0 +1,44 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+use APNIC::RPKI::CA;
+
+use Cwd;
+use Getopt::Long;
+
+sub usage
+{
+    print <<EOF;
+Usage:
+$0 --ca-name {ca-name}
+
+Shows the resources and subject key for this CA's EE certificate.
+EOF
+
+    exit(10);
+}
+
+my %options;
+GetOptions(\%options, 'ca-name=s');
+if (not $options{'ca-name'}) {
+    print "Please enter a CA name.\n";
+    usage();
+}
+
+my ($name) = @options{qw(ca-name)};
+
+my $cwd = cwd();
+my $path = $cwd."/data/cas/$name";
+my $ca = APNIC::RPKI::CA->new(ca_path => $path);
+
+my $ee = $ca->get_ee();
+my $ski = $ca->{'openssl'}->get_ski($ee);
+my ($ipv4, $ipv6, $as) = @{$ca->{'openssl'}->get_resources($ee)};
+print "SKI:  $ski\n";
+print "IPv4: ".$ipv4->as_string(),"\n";
+print "IPv6: ".$ipv6->as_string(),"\n";
+print "ASN:  ".($as->empty() ? '' : "$as")."\n";
+
+1;

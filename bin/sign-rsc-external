@@ -1,0 +1,109 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+use APNIC::RPKI::CA;
+use APNIC::RPKI::RSC;
+
+use Cwd;
+use File::Slurp qw(write_file read_file);
+use Getopt::Long;
+use List::MoreUtils qw(uniq);
+use Net::CIDR::Set;
+use Set::IntSpan;
+
+sub usage
+{
+    print <<EOF;
+Usage:
+$0 --ee-cert {EE certificate path}
+    --ee-key {EE certificate key}
+    --path {path1} [--path {path2} ...]
+    --resources {IPv4/IPv6/ASN resources}
+    --out {path}
+
+Sign an RSC object using an externally-sourced certificate and key.
+The paths to be signed are provided as arguments to the --path option.
+All certificate and key arguments must be in PEM format.
+EOF
+
+    exit(10);
+}
+
+my %options;
+GetOptions(\%options,
+    'ee-cert=s', 'ee-key=s',
+    'resources=s', 'path=s@', 'out=s');
+if (not $options{'ee-cert'}) {
+    print "Please enter an EE certificate path.\n";
+    usage();
+}
+if (not $options{'ee-key'}) {
+    print "Please enter an EE key path.\n";
+    usage();
+}
+if (not $options{'path'}) {
+    print "Please enter a path.\n";
+    usage();
+}
+if (not $options{'resources'}) {
+    print "Please enter resource details.\n";
+    usage();
+}
+if (not $options{'out'}) {
+    print "Please enter an output path.\n";
+    usage();
+}
+
+my ($ee_cert, $ee_key, $paths_temp, $resources, $out) =
+    @options{qw(ee-cert ee-key path resources out)};
+
+my $cwd = cwd();
+if ($out !~ /^\//) {
+    $out = $cwd.'/'.$out;
+}
+my @paths;
+for my $path (@{$paths_temp}) {
+    if ($path !~ /^\//) {
+        $path = $cwd.'/'.$path;
+    }
+    push @paths, $path;
+}
+
+my $openssl = APNIC::RPKI::OpenSSL->new();
+my $openssl_path = $openssl->get_openssl_path();
+
+my @resource_parts = split /,/, $resources;
+my @ipv4_resources = grep { /\./ } @resource_parts;
+my @ipv6_resources = grep { /\:/ } @resource_parts;
+my @as_resources = grep { not (/\./ or /:/) } @resource_parts;
+
+my $input = File::Temp->new();
+my $fn_input;
+my $rsc = APNIC::RPKI::RSC->new();
+$rsc->version(0);
+$rsc->ipv4(Net::CIDR::Set->new({type => 'ipv4'}, (join ',', @ipv4_resources)));
+$rsc->ipv6(Net::CIDR::Set->new({type => 'ipv6'}, (join ',', @ipv6_resources)));
+$rsc->asn(Set::IntSpan->new((join ',', @as_resources)));
+$rsc->paths(@paths);
+$rsc->algorithm('SHA256');
+
+my $rsc_asn1 = $rsc->encode();
+print $input $rsc_asn1;
+$input->flush();
+$fn_input = $input->filename();
+
+my $res = system(
+    "$openssl_path cms ".
+    " -sign -nodetach -binary ".
+    "-outform DER ".
+    "-nosmimecap ".
+    "-keyid -md sha256 -econtent_type ".APNIC::RPKI::CA::ID_CT_RSC()." ".
+    "-signer $ee_cert ".
+    "-inkey $ee_key ".
+    "-in $fn_input ".
+    "-out $out"
+);
+
+1;

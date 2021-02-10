@@ -1,0 +1,49 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+use APNIC::RPKI::CA;
+
+use Cwd;
+use Getopt::Long;
+
+sub usage
+{
+    print <<EOF;
+Usage:
+$0 --ca-name {ca-name} --resources {IPv4/IPv6/ASN resources}
+
+Issue an EE certificate.  This will revoke the CA's current EE
+certificate, if one has previously been issued.
+EOF
+
+    exit(10);
+}
+
+my %options;
+GetOptions(\%options, 'ca-name=s', 'resources=s');
+if (not $options{'ca-name'}) {
+    print "Please enter a CA name.\n";
+    usage();
+}
+if (not $options{'resources'}) {
+    print "Please enter resource details.\n";
+    usage();
+}
+
+my ($name, $resources) =
+    @options{qw(ca-name resources)};
+
+my $cwd = cwd();
+my $path = $cwd."/data/cas/$name";
+my $ca = APNIC::RPKI::CA->new(ca_path => $path);
+
+my @resource_parts = split /,/, $resources;
+my @ip_resources = grep { /\./ or /:/ } @resource_parts;
+my @as_resources = grep { not (/\./ or /:/) } @resource_parts;
+
+$ca->issue_new_ee_certificate(\@ip_resources, \@as_resources);
+$ca->issue_crl();
+
+1;

@@ -1,0 +1,85 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+use APNIC::RPKI::CA;
+use APNIC::RPKI::RSC;
+
+use Cwd;
+use File::Slurp qw(write_file);
+use Getopt::Long;
+use List::MoreUtils qw(uniq);
+use Net::CIDR::Set;
+use Set::IntSpan;
+
+sub usage
+{
+    print <<EOF;
+Usage:
+$0 --ca-name {ca-name} --path {path1} [--path {path2} ...]
+    --resources {IPv4/IPv6/ASN resources}
+    --out {path}
+
+Sign an RSC object.  The paths to be signed are provided as arguments
+to the --path option.
+EOF
+
+    exit(10);
+}
+
+my %options;
+GetOptions(\%options, 'ca-name=s', 'resources=s', 'path=s@', 'out=s');
+if (not $options{'ca-name'}) {
+    print "Please enter a CA name.\n";
+    usage();
+}
+if (not $options{'path'}) {
+    print "Please enter a path.\n";
+    usage();
+}
+if (not $options{'resources'}) {
+    print "Please enter resource details.\n";
+    usage();
+}
+if (not $options{'out'}) {
+    print "Please enter an output path.\n";
+    usage();
+}
+
+my ($ca_name, $paths_temp, $resources, $out) =
+    @options{qw(ca-name path resources out)};
+
+my $cwd = cwd();
+if ($out !~ /^\//) {
+    $out = $cwd.'/'.$out;
+}
+my @paths;
+for my $path (@{$paths_temp}) {
+    if ($path !~ /^\//) {
+        $path = $cwd.'/'.$path;
+    }
+    push @paths, $path;
+}
+
+my $path = $cwd."/data/cas/$ca_name";
+my $ca = APNIC::RPKI::CA->new(ca_path => $path);
+
+my @resource_parts = split /,/, $resources;
+my @ipv4_resources = grep { /\./ } @resource_parts;
+my @ipv6_resources = grep { /\:/ } @resource_parts;
+my @as_resources = grep { not (/\./ or /:/) } @resource_parts;
+
+my $rsc = APNIC::RPKI::RSC->new();
+$rsc->version(0);
+$rsc->ipv4(Net::CIDR::Set->new({type => 'ipv4'}, (join ',', @ipv4_resources)));
+$rsc->ipv6(Net::CIDR::Set->new({type => 'ipv6'}, (join ',', @ipv6_resources)));
+$rsc->asn(Set::IntSpan->new((join ',', @as_resources)));
+$rsc->paths(@paths);
+$rsc->algorithm('SHA256');
+
+my $rsc_asn1 = $rsc->encode();
+my $cms = $ca->sign_cms_rsc($rsc_asn1);
+write_file($out, $cms);
+
+1;

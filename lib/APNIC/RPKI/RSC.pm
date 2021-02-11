@@ -69,7 +69,7 @@ AlgorithmIdentifier  ::= SEQUENCE {
     parameters           ANY DEFINED BY algorithm OPTIONAL }
 
 FileAndHash ::= SEQUENCE {
-    file            OCTET STRING,
+    file            IA5String,
     hash            OCTET STRING }
 >;
 
@@ -274,7 +274,8 @@ sub encode
     my @filenames;
     my @hashes;
     my %seen_filenames;
-    my @paths = $self->paths();
+    my $paths_ref = $self->paths();
+    my @paths = (ref $paths_ref ? @{$paths_ref} : $paths_ref);
     for my $path (@paths) {
         my ($digest) = `sha256sum $path`;
         chomp $digest;
@@ -449,8 +450,12 @@ sub equals
             return;
         }
     }
-    my @filenames = $self->filenames();
-    my @other_filenames = $other->filenames();
+    my $filenames_ref = $self->filenames();
+    my @filenames =
+        (ref $filenames_ref ? @{$filenames_ref} : $filenames_ref);
+    my $other_filenames_ref = $other->filenames();
+    my @other_filenames =
+        (ref $other_filenames_ref ? @{$other_filenames_ref} : $other_filenames_ref);
     if (@filenames != @other_filenames) {
         return;
     }
@@ -459,9 +464,13 @@ sub equals
             return;
         }
     }
-        
-    my @hashes = $self->hashes();
-    my @other_hashes = $other->hashes();
+
+    my $hashes_ref = $self->hashes();
+    my @hashes =
+        (ref $hashes_ref ? @{$hashes_ref} : $hashes_ref);
+    my $other_hashes_ref = $other->hashes();
+    my @other_hashes =
+        (ref $other_hashes_ref ? @{$other_hashes_ref} : $other_hashes_ref);
     if (@hashes != @other_hashes) {
         return;
     }

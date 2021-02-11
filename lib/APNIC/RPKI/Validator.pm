@@ -209,8 +209,10 @@ sub validate_rsc
         $file_details{$basename} = $digest;
     }
 
-    my @filenames = $rsc->filenames();
-    my @hashes = $rsc->hashes();
+    my $filenames_ref = $rsc->filenames();
+    my $hashes_ref = $rsc->hashes();
+    my @filenames = (ref $filenames_ref ? @{$filenames_ref} : $filenames_ref);
+    my @hashes    = (ref $hashes_ref ? @{$hashes_ref} : $hashes_ref);
     my %rsc_file_details;
     for (my $i = 0; $i < @filenames; $i++) {
         my $filename = $filenames[$i];

@@ -61,8 +61,10 @@ print "IPv6:       ".($ipv6 ? $ipv6->as_string() : '')."\n";
 print "ASN:        ".($asn  ? "$asn"             : '')."\n";
 
 print "Files: \n";
-my @filenames = $rsc_parser->filenames();
-my @hashes = $rsc_parser->hashes();
+my $filenames_ref = $rsc_parser->filenames();
+my $hashes_ref = $rsc_parser->hashes();
+my @filenames = (ref $filenames_ref ? @{$filenames_ref} : $filenames_ref);
+my @hashes    = (ref $hashes_ref ? @{$hashes_ref} : $hashes_ref);
 
 for (my $i = 0; $i < @filenames; $i++) {
     my $filename = $filenames[$i];

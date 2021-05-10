@@ -109,7 +109,7 @@ use constant CRL_FILENAME     => 'crl.pem';
 use constant ID_SMIME  => '1.2.840.113549.1.9.16';
 use constant ID_CT     => ID_SMIME . '.1';
 use constant ID_CT_XML => ID_CT . '.28';
-use constant ID_CT_RSC => '1.3.6.1.4.1.41948.49';
+use constant ID_CT_RSC => '1.2.840.113549.1.9.16.1.48';
 
 our $DEBUG = 0;
 

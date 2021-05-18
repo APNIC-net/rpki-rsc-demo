@@ -28,7 +28,7 @@ RpkiSignedChecklist ::= SEQUENCE {
     version [0] INTEGER OPTIONAL, -- DEFAULT 0,
     resources             ResourceBlock,
     digestAlgorithm       AlgorithmIdentifier,
-    checkList             SEQUENCE OF FileAndHash
+    checkList             SEQUENCE OF FileNameAndHash
     }
 
 ResourceBlock       ::= SEQUENCE {
@@ -48,9 +48,9 @@ ASRange             ::= SEQUENCE {
 
 ASId                ::= INTEGER
 
-IPList              ::= SEQUENCE OF IPAddressFamily
+IPList              ::= SEQUENCE OF IPAddressFamilyItem
 
-IPAddressFamily     ::= SEQUENCE {    -- AFI & optional SAFI --
+IPAddressFamilyItem ::= SEQUENCE {    -- AFI & optional SAFI --
     addressFamily        OCTET STRING, -- (SIZE (2..3)),
     addressesOrRanges    SEQUENCE OF IPAddressOrRange }
 
@@ -64,13 +64,13 @@ IPAddressRange      ::= SEQUENCE {
 
 IPAddress           ::= BIT STRING
 
-AlgorithmIdentifier  ::= SEQUENCE {
+AlgorithmIdentifier ::= SEQUENCE {
     algorithm            OBJECT IDENTIFIER,
     parameters           ANY DEFINED BY algorithm OPTIONAL }
 
-FileAndHash ::= SEQUENCE {
-    file            IA5String,
-    hash            OCTET STRING }
+FileNameAndHash     ::= SEQUENCE {
+    fileName             IA5String,
+    hash                 OCTET STRING }
 >;
 
 sub new
@@ -283,7 +283,7 @@ sub encode
         my $filename = basename($path);
         my $hash = pack('H*', $digest);
         push @checklist, { 
-            file => $filename,
+            fileName => $filename,
             hash => $hash,
         };
         push @filenames, $filename; 
@@ -357,7 +357,7 @@ sub decode
     my @filenames;
     my @hashes;
     for my $file_details (@{$data->{'checkList'}}) {
-        my $filename = $file_details->{'file'};
+        my $filename = $file_details->{'fileName'};
         my $hash = unpack('H*', $file_details->{'hash'});
         push @filenames, $filename;
         push @hashes, $hash;

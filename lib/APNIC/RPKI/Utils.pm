@@ -26,8 +26,12 @@ sub system_ad
 {
     my ($cmd, $debug) = @_;
 
-    my $res = system($cmd.($debug ? "" : " >/dev/null 2>&1"));
+    my $output_ft = File::Temp->new();
+    my $output_fn = $output_ft->filename();
+
+    my $res = system($cmd.($debug ? "" : " >$output_fn 2>&1"));
     if ($res != 0) {
+        print read_file($output_fn);
         die "Command execution failed.\n";
     }
 

@@ -33,4 +33,6 @@ RUN wget https://ftp.openssl.org/source/openssl-1.0.2p.tar.gz \
 RUN cpanm Set::IntSpan Net::CIDR::Set
 COPY . /root/rpki-rsc
 RUN cd /root/rpki-rsc/ && perl Makefile.PL && make && make test && make install
+COPY rsyncd.conf /etc/
+RUN sed -i 's/RSYNC_ENABLE=false/RSYNC_ENABLE=true/' /etc/default/rsync
 RUN rm -rf /root/rpki-rsc/

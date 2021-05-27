@@ -32,6 +32,8 @@ my $cwd = cwd();
 my $path = $cwd."/data/cas/$name";
 my $ca = APNIC::RPKI::CA->new(ca_path => $path);
 my $pem = $ca->get_ca_pem();
-print "$pem\n";
+print "-----BEGIN CERTIFICATE-----\n".
+      "$pem\n".
+      "-----END CERTIFICATE-----\n";
 
 1;

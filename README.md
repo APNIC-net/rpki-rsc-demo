@@ -17,6 +17,7 @@ the files by hash.
 
 #### Basic RSC
 
+    # /sbin/service rsync start
     # setup-ca --name ca --resources 1.0.0.0/8
     # issue-ee --ca-name ca --resources 1.0.0.0/24
     # echo "asdf" > content
@@ -26,6 +27,7 @@ the files by hash.
 
 #### Digest mismatch
 
+    # /sbin/service rsync start
     # setup-ca --name ca --resources 1.0.0.0/8
     # issue-ee --ca-name ca --resources 1.0.0.0/24
     # echo "asdf" > content
@@ -36,6 +38,7 @@ the files by hash.
 
 #### Resource mismatch
 
+    # /sbin/service rsync start
     # setup-ca --name ca --resources 1.0.0.0/8
     # issue-ee --ca-name ca --resources 1.0.0.0/24
     # echo "asdf" > content
@@ -45,6 +48,7 @@ the files by hash.
 
 #### No validation path for resources
 
+    # /sbin/service rsync start
     # setup-ca --name ca --resources 1.0.0.0/8
     # issue-ee --ca-name ca --resources 2.0.0.0/24
     # echo "asdf" > content
@@ -55,17 +59,18 @@ the files by hash.
 
 #### Incorrect TA for verification
 
+    # /sbin/service rsync start
     # setup-ca --name ca --resources 1.0.0.0/8
     # issue-ee --ca-name ca --resources 1.0.0.0/24
     # echo "asdf" > content
     # sign-rsc --ca-name ca --path content --resources 1.0.0.0/24 --out rsc
     # setup-ca --name ca2 --resources 1.0.0.0/8
     # verify-rsc --ca-name ca2 --path content --in rsc
-    Verification failed: Verification failure ... unable to get local
-    issuer certificate.
+    Verification failed: No provided TA found in certificates got via AIAs.
 
 #### Multiple files
 
+    # /sbin/service rsync start
     # setup-ca --name ca --resources 1.0.0.0/8
     # issue-ee --ca-name ca --resources 1.0.0.0/24
     # echo "asdf1" > content1
@@ -81,11 +86,12 @@ the files by hash.
     # verify-rsc --ca-name ca --path content3 --in rsc
     Verification failed: Unable to find 'content3' in RSC.
     # echo "asdf3" > content1
-    # verify-rsc --ca-name ca --path content3 --in rsc
+    # verify-rsc --ca-name ca --path content1 --in rsc
     Verification failed: Digest mismatch for 'content1'.
 
 #### RSC under tree
 
+    # /sbin/service rsync start
     # setup-ca --name ca --resources 1.0.0.0/8
     # setup-ca --name ca2 --resources 1.0.0.0/16 --parent-name ca
     # issue-ee --ca-name ca2 --resources 1.0.0.0/24

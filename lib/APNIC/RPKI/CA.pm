@@ -206,6 +206,7 @@ sub initialise
     _system("$openssl genrsa -out ca/ca/private/ca.key 2048");
     if (not $key_only) {
         _system("$openssl req -new -x509 -key ca/ca/private/ca.key -out ca/ca.crt -subj '/CN=$common_name'");
+        _system("$openssl x509 -in ca/ca.crt -outform DER -out ca/ca.der.cer");
     }
 
     return 1;
@@ -280,22 +281,39 @@ sub sign_ca_request
 
     $self->_chdir_ca();
 
-    $ip_resources ||= [];
-    $as_resources ||= [];
-
-    my $extra = $self->_generate_sbgp_config($ip_resources, $as_resources);
-
-    $self->_generate_config(root_ca_ext_extra => $extra);
-
     my $ft_request = File::Temp->new();
     print $ft_request $request;
     $ft_request->flush();
     my $fn_request = $ft_request->filename();
 
+    $ip_resources ||= [];
+    $as_resources ||= [];
+
+    my $extra = $self->_generate_sbgp_config($ip_resources, $as_resources);
+    my $openssl = $self->{'openssl'}->get_openssl_path();
+
+    my @req_pubkey = `$openssl req -in $fn_request -pubkey -noout`;
+    chomp for @req_pubkey;
+    my $req_pubkey_str = join '', @req_pubkey;
+    my @ca_pubkey = `$openssl x509 -in ca/ca.crt -pubkey -noout`;
+    chomp for @ca_pubkey;
+    my $ca_pubkey_str = join '', @ca_pubkey;
+
+    if ($req_pubkey_str ne $ca_pubkey_str) {
+        my $path = $self->{'ca_path'};
+        my ($name) = ($path =~ /.*\/(.*)\/?/);
+        $extra = 'authorityInfoAccess=caIssuers;URI:'.
+                 "rsync://localhost/repo/cas/$name/ca/ca.der.cer\n".
+                 'crlDistributionPoints=URI:'.
+                 "rsync://localhost/repo/cas/$name/crl.der.crl\n".
+                  $extra;
+    }
+
+    $self->_generate_config(root_ca_ext_extra => $extra);
+
     my $ft_output = File::Temp->new();
     my $fn_output = $ft_output->filename();
 
-    my $openssl = $self->{'openssl'}->get_openssl_path();
     _system("$openssl ca -batch -config ca.cnf -extensions root_ca_ext ".
             "-out $fn_output ".
             "-in $fn_request -days 365");
@@ -317,6 +335,7 @@ sub install_ca_certificate
 
     my $openssl = $self->{'openssl'}->get_openssl_path();
     _system("$openssl x509 -in $fn_cert -out ca/ca.crt");
+    _system("$openssl x509 -in ca/ca.crt -outform DER -out ca/ca.der.cer");
 
     return 1;
 }
@@ -346,6 +365,13 @@ sub issue_new_ee_certificate
     $as_resources ||= [];
 
     my $extra = $self->_generate_sbgp_config($ip_resources, $as_resources);
+    my $path = $self->{'ca_path'};
+    my ($name) = ($path =~ /.*\/(.*)\/?/);
+    $extra = 'authorityInfoAccess=caIssuers;URI:'.
+             "rsync://localhost/repo/cas/$name/ca/ca.der.cer\n".
+             'crlDistributionPoints=URI:'.
+             "rsync://localhost/repo/cas/$name/crl.der.crl\n".
+             $extra;
 
     $self->_generate_config(signing_ca_ext_extra => $extra);
 
@@ -377,6 +403,8 @@ sub issue_crl
     my $openssl = $self->{'openssl'}->get_openssl_path();
     _system("$openssl ca -batch -crlexts crl_ext -config ca.cnf -gencrl ".
             "-out ".CRL_FILENAME());
+    _system("$openssl crl -in ".CRL_FILENAME()." -outform DER -out ".
+            "crl.der.crl");
 
     return 1;
 }

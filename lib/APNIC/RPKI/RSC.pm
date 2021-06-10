@@ -207,7 +207,9 @@ sub encode
 
     my $data = {};
     
-    $data->{'version'} = $self->version();
+    if ($self->version() != 0) {
+        $data->{'version'} = $self->version();
+    }
     
     my $ipv4_set = $self->ipv4();
     my @ipv4_ranges;

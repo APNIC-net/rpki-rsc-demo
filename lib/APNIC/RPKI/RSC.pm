@@ -52,7 +52,7 @@ IPList              ::= SEQUENCE OF IPAddressFamilyItem
 
 IPAddressFamilyItem ::= SEQUENCE {    -- AFI & optional SAFI --
     addressFamily        OCTET STRING, -- (SIZE (2..3)),
-    addressesOrRanges    SEQUENCE OF IPAddressOrRange }
+    iPAddressOrRange     IPAddressOrRange }
 
 IPAddressOrRange    ::= CHOICE {
     addressPrefix        IPAddress,
@@ -232,23 +232,25 @@ sub encode
     my $resources = {};
     if (@ipv4_ranges) {
         $resources->{'ipAddrBlocks'} ||= [];
-        push @{$resources->{'ipAddrBlocks'}},
-            { addressFamily => "\x00\x01",
-                addressesOrRanges => [
-                    map {
-                        encode_ip_range_or_prefix($_)
-                    } @ipv4_ranges
-                ] };
+        for my $ipv4_range (@ipv4_ranges) {
+            push @{$resources->{'ipAddrBlocks'}},
+                 { addressFamily => "\x00\x01",
+                   iPAddressOrRange =>
+                       encode_ip_range_or_prefix(
+                           $ipv4_range
+                       ) };
+        }
     }
     if (@ipv6_ranges) {
         $resources->{'ipAddrBlocks'} ||= [];
-        push @{$resources->{'ipAddrBlocks'}},
-            { addressFamily => "\x00\x02",
-                addressesOrRanges => [
-                    map {
-                        encode_ip_range_or_prefix($_)
-                    } @ipv6_ranges
-                ] };
+        for my $ipv6_range (@ipv6_ranges) {
+            push @{$resources->{'ipAddrBlocks'}},
+                 { addressFamily => "\x00\x02",
+                   iPAddressOrRange =>
+                       encode_ip_range_or_prefix(
+                           $ipv6_range
+                       ) };
+        }
     }
     if (@asn_ranges) {
         $resources->{'asList'} = [
@@ -386,18 +388,16 @@ sub decode
                 ? (\&decode_ipv4_addr, \@ipv4_ranges)
                 : (\&decode_ipv6_addr, \@ipv6_ranges);
 
-        my $ar = $ip_range->{'addressesOrRanges'} || [];
-        for my $a (@{$ar}) {
-            if ($a->{'addressPrefix'}) {
-                my ($addr, $len) = @{$a->{'addressPrefix'}};
-                push @{$range_ref}, $method->($addr, $len);
-            } else {
-                my $min = $method->(@{$a->{'addressRange'}->{'min'}});
-                my $max = $method->(@{$a->{'addressRange'}->{'max'}});
-                $min =~ s/\/.*//;
-                $max =~ s/\/.*//;
-                push @{$range_ref}, $min.'-'.$max;
-            }
+        my $a = $ip_range->{'iPAddressOrRange'} || [];
+        if ($a->{'addressPrefix'}) {
+            my ($addr, $len) = @{$a->{'addressPrefix'}};
+            push @{$range_ref}, $method->($addr, $len);
+        } else {
+            my $min = $method->(@{$a->{'addressRange'}->{'min'}});
+            my $max = $method->(@{$a->{'addressRange'}->{'max'}});
+            $min =~ s/\/.*//;
+            $max =~ s/\/.*//;
+            push @{$range_ref}, $min.'-'.$max;
         }
     }
    

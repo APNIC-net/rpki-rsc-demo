@@ -15,7 +15,6 @@ APNIC::RPKI::RSC->mk_accessors(qw(
     ipv6
     asn
     algorithm
-    digest
     paths
     filenames
     hashes
@@ -32,11 +31,18 @@ RpkiSignedChecklist ::= SEQUENCE {
     }
 
 ResourceBlock       ::= SEQUENCE {
-    asList       [0]       AsList OPTIONAL,
-    ipAddrBlocks [1]       IPList OPTIONAL }
+    asID         [0]       ConstrainedASIdentifiers OPTIONAL,
+    ipAddrBlocks [1]       ConstrainedIPAddrBlocks OPTIONAL }
     -- at least one of asList or ipAddrBlocks must be present
 
-AsList              ::= SEQUENCE OF ASIdOrRange
+ConstrainedIPAddrBlocks     ::= SEQUENCE OF ConstrainedIPAddressFamily
+
+ConstrainedIPAddressFamily   ::= SEQUENCE { -- AFI & opt SAFI --
+    addressFamily        OCTET STRING, -- (SIZE (2)),
+    addressesOrRanges    SEQUENCE OF IPAddressOrRange }
+
+ConstrainedASIdentifiers    ::= SEQUENCE {
+    asnum               [0] SEQUENCE OF ASIdOrRange }
 
 ASIdOrRange         ::= CHOICE {
     id                   ASId,
@@ -47,12 +53,6 @@ ASRange             ::= SEQUENCE {
     max                  ASId }
 
 ASId                ::= INTEGER
-
-IPList              ::= SEQUENCE OF IPAddressFamilyItem
-
-IPAddressFamilyItem ::= SEQUENCE {    -- AFI & optional SAFI --
-    addressFamily        OCTET STRING, -- (SIZE (2..3)),
-    iPAddressOrRange     IPAddressOrRange }
 
 IPAddressOrRange    ::= CHOICE {
     addressPrefix        IPAddress,
@@ -232,35 +232,33 @@ sub encode
     my $resources = {};
     if (@ipv4_ranges) {
         $resources->{'ipAddrBlocks'} ||= [];
-        for my $ipv4_range (@ipv4_ranges) {
-            push @{$resources->{'ipAddrBlocks'}},
-                 { addressFamily => "\x00\x01",
-                   iPAddressOrRange =>
-                       encode_ip_range_or_prefix(
-                           $ipv4_range
-                       ) };
-        }
+        push @{$resources->{'ipAddrBlocks'}},
+             { addressFamily => "\x00\x01",
+               addressesOrRanges => [
+                   map { encode_ip_range_or_prefix($_) }
+                       @ipv4_ranges
+               ] };
     }
     if (@ipv6_ranges) {
         $resources->{'ipAddrBlocks'} ||= [];
-        for my $ipv6_range (@ipv6_ranges) {
-            push @{$resources->{'ipAddrBlocks'}},
-                 { addressFamily => "\x00\x02",
-                   iPAddressOrRange =>
-                       encode_ip_range_or_prefix(
-                           $ipv6_range
-                       ) };
-        }
+        push @{$resources->{'ipAddrBlocks'}},
+             { addressFamily => "\x00\x02",
+               addressesOrRanges => [
+                   map { encode_ip_range_or_prefix($_) }
+                       @ipv6_ranges
+               ] };
     }
     if (@asn_ranges) {
-        $resources->{'asList'} = [
-            map {
-                my $s = $_;
-                ($s->[0] == $s->[1])
-                    ? +{ id => $s->[0] }
-                    : +{ range => { min => $s->[0], max => $s->[1] } }
-            } @asn_ranges
-        ];
+        $resources->{'asID'} = {
+            asnum => [
+                map {
+                    my $s = $_;
+                    ($s->[0] == $s->[1])
+                        ? +{ id => $s->[0] }
+                        : +{ range => { min => $s->[0], max => $s->[1] } }
+                } @asn_ranges
+            ]
+        };
     }
 
     $data->{'resources'} = $resources;
@@ -350,7 +348,11 @@ sub decode
         die $parser->error();
     }
 
-    $self->version($data->{'version'});
+    if (exists $data->{'version'}) {
+        $self->version($data->{'version'});
+    } else {
+        $self->version(0);
+    }
     if ($data->{'digestAlgorithm'}->{'algorithm'} eq ID_SHA256) {
         $self->algorithm('SHA256');
     } else {
@@ -362,7 +364,7 @@ sub decode
     my @hashes;
     for my $file_details (@{$data->{'checkList'}}) {
         my $filename = $file_details->{'fileName'};
-        my $hash = unpack('H*', $file_details->{'hash'});
+        my $hash = $file_details->{'hash'};
         push @filenames, $filename;
         push @hashes, $hash;
     }
@@ -371,7 +373,7 @@ sub decode
 
     my $resources = $data->{'resources'};
     my @as_ranges;
-    for my $as (@{$resources->{'asList'} || []}) {
+    for my $as (@{$resources->{'asID'}->{'asnum'} || []}) {
         if ($as->{'id'}) {
             push @as_ranges, $as->{'id'};
         } else {
@@ -388,16 +390,18 @@ sub decode
                 ? (\&decode_ipv4_addr, \@ipv4_ranges)
                 : (\&decode_ipv6_addr, \@ipv6_ranges);
 
-        my $a = $ip_range->{'iPAddressOrRange'} || [];
-        if ($a->{'addressPrefix'}) {
-            my ($addr, $len) = @{$a->{'addressPrefix'}};
-            push @{$range_ref}, $method->($addr, $len);
-        } else {
-            my $min = $method->(@{$a->{'addressRange'}->{'min'}});
-            my $max = $method->(@{$a->{'addressRange'}->{'max'}});
-            $min =~ s/\/.*//;
-            $max =~ s/\/.*//;
-            push @{$range_ref}, $min.'-'.$max;
+        my $addresses_or_ranges = $ip_range->{'addressesOrRanges'} || [];
+        for my $ar (@{$addresses_or_ranges}) {
+            if ($ar->{'addressPrefix'}) {
+                my ($addr, $len) = @{$ar->{'addressPrefix'}};
+                push @{$range_ref}, $method->($addr, $len);
+            } else {
+                my $min = $method->(@{$ar->{'addressRange'}->{'min'}});
+                my $max = $method->(@{$ar->{'addressRange'}->{'max'}});
+                $min =~ s/\/.*//;
+                $max =~ s/\/.*//;
+                push @{$range_ref}, $min.'-'.$max;
+            }
         }
     }
    
@@ -423,9 +427,6 @@ sub equals
         return;
     }
     if ($self->algorithm() ne $other->algorithm()) {
-        return;
-    }
-    if ($self->digest() ne $other->digest()) {
         return;
     }
     if ($self->ipv4() xor $other->ipv4()) {

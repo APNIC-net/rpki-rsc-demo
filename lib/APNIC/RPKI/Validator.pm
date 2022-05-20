@@ -206,7 +206,8 @@ sub validate_rsc
         my ($digest) = `sha256sum $path`;
         chomp $digest;
         $digest =~ s/ .*//;
-        $file_details{$basename} = $digest;
+        my $hash = pack('H*', $digest);
+        $file_details{$basename} = $hash;
     }
 
     my $filenames_ref = $rsc->filenames();
@@ -218,6 +219,7 @@ sub validate_rsc
         my $filename = $filenames[$i];
         my $hash = $hashes[$i];
         $rsc_file_details{$filename} = $hash;
+        my $digest = unpack('H*', $hash);
     }
 
     for my $name (keys %file_details) {

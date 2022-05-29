@@ -19,7 +19,9 @@ sub usage
     print <<EOF;
 Usage:
 $0 --ca-name {ca-name} --ca-cert-path {ca-cert-path}
-    --path {path1} [--path {path2} ...] --in {path}
+    --path {path1} [--path {path2} ...]
+    --path-unnamed {path1} [--path-unnamed {path2} ...]
+    --in {path}
 
 Verify an RSC object.  The names of the trusted root CAs are provided
 as arguments to the --ca-name option.  Trusted root CA certificate
@@ -31,13 +33,15 @@ EOF
 }
 
 my %options;
-GetOptions(\%options, 'ca-name=s@', 'ca-cert-path=s@', 'path=s@', 'in=s');
+GetOptions(\%options, 'ca-name=s@', 'ca-cert-path=s@', 'path=s@',
+           'path-unnamed=s@', 'in=s');
 if (not @{$options{'ca-name'} || []}
         and not @{$options{'ca-cert-path'} || []}) {
     print "Please enter a CA name or a CA certificate path.\n";
     usage();
 }
-if (not @{$options{'path'} || []}) {
+if (not @{$options{'path'} || []}
+        and not @{$options{'path-unnamed'} || []}) {
     print "Please enter a content path.\n";
     usage();
 }
@@ -46,8 +50,9 @@ if (not $options{'in'}) {
     usage();
 }
 
-my ($ca_names, $ca_cert_paths, $paths_temp, $resources, $in) =
-    @options{qw(ca-name ca-cert-path path resources in)};
+my ($ca_names, $ca_cert_paths, $paths_temp, $paths_unnamed_temp,
+    $resources, $in) =
+    @options{qw(ca-name ca-cert-path path path-unnamed resources in)};
 
 my $cwd = cwd();
 
@@ -57,6 +62,14 @@ for my $path (@{$paths_temp}) {
         $path = $cwd.'/'.$path;
     }
     push @paths, $path;
+}
+
+my @paths_unnamed;
+for my $path_unnamed (@{$paths_unnamed_temp}) {
+    if ($path_unnamed !~ /^\//) {
+        $path_unnamed = $cwd.'/'.$path_unnamed;
+    }
+    push @paths_unnamed, $path_unnamed;
 }
 
 my @cas =
@@ -87,7 +100,10 @@ if ($in !~ /^\//) {
 my $rsc_data = read_file($in);
 
 my $validator = APNIC::RPKI::Validator->new();
-my $res = eval {  $validator->validate_rsc($rsc_data, $certs, \@paths); };
+my $res = eval {
+    $validator->validate_rsc($rsc_data, $certs, \@paths,
+                             \@paths_unnamed);
+};
 if (my $error = $@) {
     print "Verification failed: $error";
     exit(1);

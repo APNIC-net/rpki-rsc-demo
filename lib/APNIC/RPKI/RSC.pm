@@ -16,8 +16,10 @@ APNIC::RPKI::RSC->mk_accessors(qw(
     asn
     algorithm
     paths
+    paths_unnamed
     filenames
     hashes
+    hashes_unnamed
 ));
 
 use constant ID_SHA256 => '2.16.840.1.101.3.4.2.1';
@@ -69,7 +71,7 @@ AlgorithmIdentifier ::= SEQUENCE {
     parameters           ANY DEFINED BY algorithm OPTIONAL }
 
 FileNameAndHash     ::= SEQUENCE {
-    fileName             IA5String,
+    fileName             IA5String OPTIONAL,
     hash                 OCTET STRING }
 >;
 
@@ -206,11 +208,11 @@ sub encode
     my ($self) = @_;
 
     my $data = {};
-    
+
     if ($self->version() != 0) {
         $data->{'version'} = $self->version();
     }
-    
+
     my $ipv4_set = $self->ipv4();
     my @ipv4_ranges;
     if ($ipv4_set) {
@@ -275,29 +277,57 @@ sub encode
     my @checklist;
     my @filenames;
     my @hashes;
+    my @hashes_unnamed;
     my %seen_filenames;
+    my %seen_hashes_unnamed;
     my $paths_ref = $self->paths();
-    my @paths = (ref $paths_ref ? @{$paths_ref} : $paths_ref);
+    my @paths =
+        grep { defined $_ }
+            (ref $paths_ref
+                ? @{$paths_ref}
+                : $paths_ref);
     for my $path (@paths) {
         my ($digest) = `sha256sum $path`;
         chomp $digest;
         $digest =~ s/ .*//;
         my $filename = basename($path);
         my $hash = pack('H*', $digest);
-        push @checklist, { 
+        push @checklist, {
             fileName => $filename,
             hash => $hash,
         };
-        push @filenames, $filename; 
+        push @filenames, $filename;
         push @hashes, $hash;
         if ($seen_filenames{$filename}) {
             die "Filename '$filename' already in RSC.\n";
         }
         $seen_filenames{$filename} = 1;
     }
+    my $paths_unnamed_ref = $self->paths_unnamed();
+    my @paths_unnamed =
+        grep { defined $_ }
+            (ref $paths_unnamed_ref
+                ? @{$paths_unnamed_ref}
+                : $paths_unnamed_ref);
+    for my $path_unnamed (@paths_unnamed) {
+        my ($digest) = `sha256sum $path_unnamed`;
+        chomp $digest;
+        $digest =~ s/ .*//;
+        my $hash = pack('H*', $digest);
+        # Permit duplicate hashes to be entered here for testing.
+        push @checklist, {
+            hash => $hash,
+        };
+        push @hashes_unnamed, $hash;
+        if ($seen_hashes_unnamed{$hash}) {
+            die "Hash '$hash' already in RSC.\n";
+        }
+        $seen_hashes_unnamed{$hash} = 1;
+    }
     $data->{'checkList'} = \@checklist;
     $self->filenames(@filenames);
     $self->hashes(@hashes);
+    $self->hashes_unnamed(\@hashes_unnamed);
 
     my $parser = $self->{'parser'};
     my $rsc = $parser->encode($data);
@@ -362,14 +392,20 @@ sub decode
 
     my @filenames;
     my @hashes;
+    my @hashes_unnamed;
     for my $file_details (@{$data->{'checkList'}}) {
         my $filename = $file_details->{'fileName'};
         my $hash = $file_details->{'hash'};
-        push @filenames, $filename;
-        push @hashes, $hash;
+        if ($filename) {
+            push @filenames, $filename;
+            push @hashes, $hash;
+        } else {
+            push @hashes_unnamed, $hash;
+        }
     }
     $self->filenames(@filenames);
     $self->hashes(@hashes);
+    $self->hashes_unnamed(@hashes_unnamed);
 
     my $resources = $data->{'resources'};
     my @as_ranges;
@@ -404,7 +440,7 @@ sub decode
             }
         }
     }
-   
+
     if (@ipv4_ranges) {
         $self->ipv4(Net::CIDR::Set->new({type => 'ipv4'}, (join ',', @ipv4_ranges)));
     } else {
@@ -455,10 +491,12 @@ sub equals
     }
     my $filenames_ref = $self->filenames();
     my @filenames =
-        (ref $filenames_ref ? @{$filenames_ref} : $filenames_ref);
+        grep { defined $_ }
+            (ref $filenames_ref ? @{$filenames_ref} : $filenames_ref);
     my $other_filenames_ref = $other->filenames();
     my @other_filenames =
-        (ref $other_filenames_ref ? @{$other_filenames_ref} : $other_filenames_ref);
+        grep { defined $_ }
+            (ref $other_filenames_ref ? @{$other_filenames_ref} : $other_filenames_ref);
     if (@filenames != @other_filenames) {
         return;
     }
@@ -470,15 +508,38 @@ sub equals
 
     my $hashes_ref = $self->hashes();
     my @hashes =
-        (ref $hashes_ref ? @{$hashes_ref} : $hashes_ref);
+        grep { defined $_ }
+            (ref $hashes_ref ? @{$hashes_ref} : $hashes_ref);
     my $other_hashes_ref = $other->hashes();
     my @other_hashes =
-        (ref $other_hashes_ref ? @{$other_hashes_ref} : $other_hashes_ref);
+        grep { defined $_ }
+            (ref $other_hashes_ref ? @{$other_hashes_ref} : $other_hashes_ref);
     if (@hashes != @other_hashes) {
         return;
     }
     for (my $i = 0; $i < @hashes; $i++) {
         if ($hashes[$i] ne $other_hashes[$i]) {
+            return;
+        }
+    }
+
+    my $hashes_unnamed_ref = $self->hashes_unnamed();
+    my @hashes_unnamed =
+        grep { defined $_ }
+            (ref $hashes_unnamed_ref
+                ? @{$hashes_unnamed_ref}
+                : $hashes_unnamed_ref);
+    my $other_hashes_unnamed_ref = $other->hashes_unnamed();
+    my @other_hashes_unnamed =
+        grep { defined $_ }
+            (ref $other_hashes_unnamed_ref
+                ? @{$other_hashes_unnamed_ref}
+                : $other_hashes_unnamed_ref);
+    if (@hashes_unnamed != @other_hashes_unnamed) {
+        return;
+    }
+    for (my $i = 0; $i < @hashes_unnamed; $i++) {
+        if ($hashes_unnamed[$i] ne $other_hashes_unnamed[$i]) {
             return;
         }
     }

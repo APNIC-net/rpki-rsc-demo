@@ -25,6 +25,16 @@ the files by hash.
     # verify-rsc --ca-name ca --path content --in rsc
     Verification succeeded.
 
+#### Basic RSC (unnamed object)
+
+    # /sbin/service rsync start
+    # setup-ca --name ca --resources 1.0.0.0/8
+    # issue-ee --ca-name ca --resources 1.0.0.0/24
+    # echo "asdf" > content
+    # sign-rsc --ca-name ca --path-unnamed content --resources 1.0.0.0/24 --out rsc
+    # verify-rsc --ca-name ca --path-unnamed content --in rsc
+    Verification succeeded.
+
 #### Digest mismatch
 
     # /sbin/service rsync start

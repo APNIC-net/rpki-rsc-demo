@@ -24,10 +24,10 @@ sub new
 
 sub validate_rsc
 {
-    my ($self, $rsc_raw, $ta, $paths, $certs_only) = @_;
+    my ($self, $rsc_raw, $ta, $paths, $paths_unnamed, $certs_only) = @_;
 
     my $openssl = $self->{'openssl'}->{'path'};
-    
+
     my $ft = File::Temp->new();
     print $ft $rsc_raw;
     $ft->flush();
@@ -212,8 +212,12 @@ sub validate_rsc
 
     my $filenames_ref = $rsc->filenames();
     my $hashes_ref = $rsc->hashes();
-    my @filenames = (ref $filenames_ref ? @{$filenames_ref} : $filenames_ref);
-    my @hashes    = (ref $hashes_ref ? @{$hashes_ref} : $hashes_ref);
+    my @filenames =
+        grep { defined $_ }
+            (ref $filenames_ref ? @{$filenames_ref} : $filenames_ref);
+    my @hashes    =
+        grep { defined $_ }
+            (ref $hashes_ref ? @{$hashes_ref} : $hashes_ref);
     my %rsc_file_details;
     for (my $i = 0; $i < @filenames; $i++) {
         my $filename = $filenames[$i];
@@ -229,6 +233,31 @@ sub validate_rsc
         }
         if ($rsc_file_details{$name} ne $hash) {
             die "Digest mismatch for '$name'.\n";
+        }
+    }
+
+    my @hashes_unnamed;
+    for my $path_unnamed (@{$paths_unnamed}) {
+        my ($digest) = `sha256sum $path_unnamed`;
+        chomp $digest;
+        $digest =~ s/ .*//;
+        my $hash = pack('H*', $digest);
+        push @hashes_unnamed, $hash;
+    }
+
+    my $rsc_hashes_unnamed_ref = $rsc->hashes_unnamed();
+    my @rsc_hashes_unnamed =
+        grep { defined $_ }
+            (ref $rsc_hashes_unnamed_ref
+                ? @{$rsc_hashes_unnamed_ref}
+                : $rsc_hashes_unnamed_ref);
+    my %rsc_hashes_unnamed_lookup =
+        map { $_ => 1 }
+            @rsc_hashes_unnamed;
+
+    for my $hash_unnamed (@hashes_unnamed) {
+        if (not $rsc_hashes_unnamed_lookup{$hash_unnamed}) {
+            die "Unable to find digest '$hash_unnamed' in RSC.\n";
         }
     }
 

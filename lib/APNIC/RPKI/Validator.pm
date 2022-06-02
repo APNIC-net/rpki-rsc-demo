@@ -265,8 +265,8 @@ sub validate_rsc
         die "IPv4 resource mismatch.\n";
     }
     if ($rsc->ipv4()) {
-        if (not $rsc->ipv4()->equals($ipv4_set)) {
-            die "IPv4 resource mismatch.\n";
+        if (not $ipv4_set->contains_all($rsc->ipv4())) {
+            die "RSC IPv4 resources not within certificate's resources.\n";
         }
     }
 
@@ -274,8 +274,8 @@ sub validate_rsc
         die "IPv6 resource mismatch.\n";
     }
     if ($rsc->ipv6()) {
-        if (not $rsc->ipv6()->equals($ipv6_set)) {
-            die "IPv6 resource mismatch.\n";
+        if (not $ipv6_set->contains_all($rsc->ipv6())) {
+            die "RSC IPv6 resources not within certificate's resources.\n";
         }
     }
 
@@ -283,8 +283,8 @@ sub validate_rsc
         die "ASN resource mismatch.\n";
     }
     if ($rsc->asn()) {
-        if (not ($rsc->asn() eq $as_set)) {
-            die "ASN resource mismatch.\n";
+        if (not ($rsc->asn() le $as_set)) {
+            die "RSC ASN resources not within certificate's resources.\n";
         }
     }
 

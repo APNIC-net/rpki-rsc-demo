@@ -23,7 +23,7 @@ RUN apt-get install -y \
     vim \
     less
 COPY cms.diff .
-RUN wget https://ftp.openssl.org/source/openssl-1.0.2p.tar.gz \
+RUN wget https://openssl.org/source/old/1.0.2/openssl-1.0.2p.tar.gz \
     && tar xf openssl-1.0.2p.tar.gz \
     && cd openssl-1.0.2p \
     && patch -p1 < /cms.diff \

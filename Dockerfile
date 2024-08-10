@@ -23,13 +23,15 @@ RUN apt-get install -y \
     vim \
     less
 COPY cms.diff .
-RUN wget https://openssl.org/source/old/1.0.2/openssl-1.0.2p.tar.gz \
-    && tar xf openssl-1.0.2p.tar.gz \
-    && cd openssl-1.0.2p \
+RUN wget https://github.com/openssl/openssl/releases/download/openssl-3.3.1/openssl-3.3.1.tar.gz \
+    && tar xf openssl-3.3.1.tar.gz \
+    && cd openssl-3.3.1 \
     && patch -p1 < /cms.diff \
     && ./config enable-rfc3779 \
     && make \
     && make install
+ENV LD_LIBRARY_PATH /usr/local/lib:/usr/local/lib64
+RUN ldconfig
 RUN cpanm Set::IntSpan Net::CIDR::Set
 COPY . /root/rpki-rsc
 RUN cd /root/rpki-rsc/ && perl Makefile.PL && make && make test && make install

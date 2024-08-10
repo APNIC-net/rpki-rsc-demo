@@ -20,7 +20,7 @@ sub new
     my $self = \%args;
 
     if (not $self->{'path'}) {
-        $self->{'path'} = "/usr/local/ssl/bin/openssl";
+        $self->{'path'} = "/usr/local/bin/openssl";
     }
 
     bless $self, $class;

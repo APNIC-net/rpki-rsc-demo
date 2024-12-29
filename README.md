@@ -1,7 +1,7 @@
 ## rpki-rsc
 
 A proof-of-concept for constructing and validating RPKI signed checklists (RSCs).
-See [https://www.ietf.org/archive/id/draft-ietf-sidrops-rpki-rsc-07.txt](https://www.ietf.org/archive/id/draft-ietf-sidrops-rpki-rsc-07.txt).
+See [RFC 9323](https://www.rfc-editor.org/rfc/rfc9323.txt).
 
 For verifying RSCs, the local filename must be the same as that used
 in the RSC itself: the verification script does not attempt to match
